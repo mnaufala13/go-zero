@@ -20,6 +20,10 @@ const (
 	ClusterType = "cluster"
 	// NodeType means redis node.
 	NodeType = "node"
+	// MasterType means master node in master slave mode
+	MasterType = "master"
+	// SlaveType means slave node in master slave mode
+	SlaveType = "slave"
 	// Nil is an alias of redis.Nil.
 	Nil = red.Nil
 

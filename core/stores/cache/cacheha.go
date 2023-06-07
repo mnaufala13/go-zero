@@ -10,6 +10,7 @@ import (
 	"github.com/zeromicro/go-zero/core/mathx"
 	"github.com/zeromicro/go-zero/core/stat"
 	"github.com/zeromicro/go-zero/core/syncx"
+	"log"
 	"math"
 	"time"
 )
@@ -27,7 +28,7 @@ type cacheMasterSlave struct {
 }
 
 func NewMasterSlave(master, mPass, sPass string, slaves []string, barrier syncx.SingleFlight, st *Stat,
-	errNotFound error, opts ...Option) (Cache, error) {
+	errNotFound error, opts ...Option) Cache {
 	o := newOptions(opts...)
 	p, err := pool.NewHA(&pool.HAConfig{
 		Master:           master,
@@ -36,7 +37,7 @@ func NewMasterSlave(master, mPass, sPass string, slaves []string, barrier syncx.
 		ReadonlyPassword: sPass, // use password if no set
 	})
 	if err != nil {
-		return nil, err
+		log.Fatal(err.Error())
 	}
 
 	return cacheMasterSlave{
@@ -49,7 +50,7 @@ func NewMasterSlave(master, mPass, sPass string, slaves []string, barrier syncx.
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           st,
 		errNotFound:    errNotFound,
-	}, nil
+	}
 }
 
 func (c cacheMasterSlave) Del(keys ...string) error {
