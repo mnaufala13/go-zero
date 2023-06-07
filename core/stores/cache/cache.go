@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	"log"
 	"time"
 
@@ -66,9 +67,23 @@ func New(c ClusterConf, barrier syncx.SingleFlight, st *Stat, errNotFound error,
 	}
 
 	dispatcher := hash.NewConsistentHash()
+	var master, mPass, sPass string
+	slaves := []string{}
 	for _, node := range c {
-		cn := NewNode(node.NewRedis(), barrier, st, errNotFound, opts...)
-		dispatcher.AddWithWeight(cn, node.Weight)
+		if node.Type == redis.MasterType {
+			master = node.Host
+			mPass = node.Pass
+		} else if node.Type == redis.SlaveType {
+			slaves = append(slaves, node.Host)
+			sPass = node.Pass
+		} else {
+			cn := NewNode(node.NewRedis(), barrier, st, errNotFound, opts...)
+			dispatcher.AddWithWeight(cn, node.Weight)
+		}
+	}
+
+	if master != "" {
+		return NewMasterSlave(master, mPass, sPass, slaves, barrier, st, errNotFound, opts...)
 	}
 
 	return cacheCluster{

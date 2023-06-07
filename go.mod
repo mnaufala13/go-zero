@@ -33,7 +33,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.10.0
 	go.uber.org/automaxprocs v1.5.1
 	go.uber.org/goleak v1.2.0
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+	golang.org/x/sys v0.4.0
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.28.1
@@ -47,13 +47,13 @@ require (
 )
 
 require (
+	github.com/bitleak/go-redis-pool/v3 v3.0.0
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
-	golang.org/x/net v0.0.0-20220531201128-c960675eff93 // indirect
 	google.golang.org/genproto v0.0.0-20220602131408-e326c6e8e9c8
 	k8s.io/klog/v2 v2.40.1 // indirect
 )
