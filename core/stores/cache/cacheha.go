@@ -71,11 +71,11 @@ func (c cacheMasterSlave) DelCtx(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-func (c cacheMasterSlave) Get(key string, val any) error {
+func (c cacheMasterSlave) Get(key string, val interface{}) error {
 	return c.GetCtx(context.Background(), key, val)
 }
 
-func (c cacheMasterSlave) GetCtx(ctx context.Context, key string, val any) error {
+func (c cacheMasterSlave) GetCtx(ctx context.Context, key string, val interface{}) error {
 	err := c.doGetCache(ctx, key, val)
 	if err == errPlaceholder {
 		return c.errNotFound
@@ -88,19 +88,19 @@ func (c cacheMasterSlave) IsNotFound(err error) bool {
 	return errors.Is(err, c.errNotFound)
 }
 
-func (c cacheMasterSlave) Set(key string, val any) error {
+func (c cacheMasterSlave) Set(key string, val interface{}) error {
 	return c.SetCtx(context.Background(), key, val)
 }
 
-func (c cacheMasterSlave) SetCtx(ctx context.Context, key string, val any) error {
+func (c cacheMasterSlave) SetCtx(ctx context.Context, key string, val interface{}) error {
 	return c.SetWithExpireCtx(ctx, key, val, c.aroundDuration(c.expiry))
 }
 
-func (c cacheMasterSlave) SetWithExpire(key string, val any, expire time.Duration) error {
+func (c cacheMasterSlave) SetWithExpire(key string, val interface{}, expire time.Duration) error {
 	return c.SetWithExpireCtx(context.Background(), key, val, expire)
 }
 
-func (c cacheMasterSlave) SetWithExpireCtx(ctx context.Context, key string, val any, expire time.Duration) error {
+func (c cacheMasterSlave) SetWithExpireCtx(ctx context.Context, key string, val interface{}, expire time.Duration) error {
 	data, err := jsonx.Marshal(val)
 	if err != nil {
 		return err
@@ -113,25 +113,25 @@ func (c cacheMasterSlave) String() string {
 	return "master_slave"
 }
 
-func (c cacheMasterSlave) Take(val any, key string, query func(val any) error) error {
+func (c cacheMasterSlave) Take(val interface{}, key string, query func(val interface{}) error) error {
 	return c.TakeCtx(context.Background(), val, key, query)
 }
 
-func (c cacheMasterSlave) TakeCtx(ctx context.Context, val any, key string, query func(val any) error) error {
-	return c.doTake(ctx, val, key, query, func(v any) error {
+func (c cacheMasterSlave) TakeCtx(ctx context.Context, val interface{}, key string, query func(val interface{}) error) error {
+	return c.doTake(ctx, val, key, query, func(v interface{}) error {
 		return c.SetCtx(ctx, key, v)
 	})
 }
 
-func (c cacheMasterSlave) TakeWithExpire(val any, key string, query func(val any, expire time.Duration) error) error {
+func (c cacheMasterSlave) TakeWithExpire(val interface{}, key string, query func(val interface{}, expire time.Duration) error) error {
 	return c.TakeWithExpireCtx(context.Background(), val, key, query)
 }
 
-func (c cacheMasterSlave) TakeWithExpireCtx(ctx context.Context, val any, key string, query func(val any, expire time.Duration) error) error {
+func (c cacheMasterSlave) TakeWithExpireCtx(ctx context.Context, val interface{}, key string, query func(val interface{}, expire time.Duration) error) error {
 	expire := c.aroundDuration(c.expiry)
-	return c.doTake(ctx, val, key, func(v any) error {
+	return c.doTake(ctx, val, key, func(v interface{}) error {
 		return query(v, expire)
-	}, func(v any) error {
+	}, func(v interface{}) error {
 		return c.SetWithExpireCtx(ctx, key, v, expire)
 	})
 }
@@ -147,7 +147,7 @@ func (c cacheMasterSlave) asyncRetryDelCache(keys ...string) {
 	}, keys...)
 }
 
-func (c cacheMasterSlave) doGetCache(ctx context.Context, key string, v any) error {
+func (c cacheMasterSlave) doGetCache(ctx context.Context, key string, v interface{}) error {
 	data, err := c.rds.Get(ctx, key).Result()
 	if err != nil {
 		return err
@@ -156,10 +156,10 @@ func (c cacheMasterSlave) doGetCache(ctx context.Context, key string, v any) err
 	return c.processCache(ctx, key, data, v)
 }
 
-func (c cacheMasterSlave) doTake(ctx context.Context, v any, key string,
-	query func(v any) error, cacheVal func(v any) error) error {
+func (c cacheMasterSlave) doTake(ctx context.Context, v interface{}, key string,
+	query func(v interface{}) error, cacheVal func(v interface{}) error) error {
 	logger := logx.WithContext(ctx)
-	val, fresh, err := c.barrier.DoEx(key, func() (any, error) {
+	val, fresh, err := c.barrier.DoEx(key, func() (interface{}, error) {
 		if err := c.doGetCache(ctx, key, v); err != nil {
 			if err == errPlaceholder {
 				return nil, c.errNotFound
@@ -206,7 +206,7 @@ func (c cacheMasterSlave) doTake(ctx context.Context, v any, key string,
 	return jsonx.Unmarshal(val.([]byte), v)
 }
 
-func (c cacheMasterSlave) processCache(ctx context.Context, key, data string, v any) error {
+func (c cacheMasterSlave) processCache(ctx context.Context, key, data string, v interface{}) error {
 	err := jsonx.Unmarshal([]byte(data), v)
 	if err == nil {
 		return nil
