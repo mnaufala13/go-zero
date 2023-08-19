@@ -15,7 +15,7 @@ type (
 	// A RedisConf is a redis config.
 	RedisConf struct {
 		Host string
-		Type string `json:",default=node,options=node|cluster|master"`
+		Type string `json:",default=node,options=node|cluster|master|slave"`
 		Pass string `json:",optional"`
 		Tls  bool   `json:",optional"`
 	}
