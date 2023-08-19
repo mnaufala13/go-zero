@@ -1,12 +1,12 @@
 package logx
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -18,6 +18,7 @@ type (
 	Writer interface {
 		Alert(v interface{})
 		Close() error
+		Debug(v interface{}, fields ...LogField)
 		Error(v interface{}, fields ...LogField)
 		Info(v interface{}, fields ...LogField)
 		Severe(v interface{})
@@ -194,6 +195,10 @@ func (w *concreteWriter) Close() error {
 	return w.statLog.Close()
 }
 
+func (w *concreteWriter) Debug(v interface{}, fields ...LogField) {
+	output(w.infoLog, levelDebug, v, fields...)
+}
+
 func (w *concreteWriter) Error(v interface{}, fields ...LogField) {
 	output(w.errorLog, levelError, v, fields...)
 }
@@ -227,6 +232,9 @@ func (n nopWriter) Close() error {
 	return nil
 }
 
+func (n nopWriter) Debug(_ interface{}, _ ...LogField) {
+}
+
 func (n nopWriter) Error(_ interface{}, _ ...LogField) {
 }
 
@@ -245,24 +253,47 @@ func (n nopWriter) Stack(_ interface{}) {
 func (n nopWriter) Stat(_ interface{}, _ ...LogField) {
 }
 
-func buildFields(fields ...LogField) []string {
+func buildPlainFields(fields ...LogField) []string {
 	var items []string
 
 	for _, field := range fields {
-		items = append(items, fmt.Sprintf("%s=%v", field.Key, field.Value))
+		items = append(items, fmt.Sprintf("%s=%+v", field.Key, field.Value))
 	}
 
 	return items
 }
 
+func combineGlobalFields(fields []LogField) []LogField {
+	globals := globalFields.Load()
+	if globals == nil {
+		return fields
+	}
+
+	gf := globals.([]LogField)
+	ret := make([]LogField, 0, len(gf)+len(fields))
+	ret = append(ret, gf...)
+	ret = append(ret, fields...)
+
+	return ret
+}
+
 func output(writer io.Writer, level string, val interface{}, fields ...LogField) {
-	fields = append(fields, Field(callerKey, getCaller(callerDepth)))
+	// only truncate string content, don't know how to truncate the values of other types.
+	if v, ok := val.(string); ok {
+		maxLen := atomic.LoadUint32(&maxContentLength)
+		if maxLen > 0 && len(v) > int(maxLen) {
+			val = v[:maxLen]
+			fields = append(fields, truncatedField)
+		}
+	}
+
+	fields = combineGlobalFields(fields)
 
 	switch atomic.LoadUint32(&encoding) {
 	case plainEncodingType:
-		writePlainAny(writer, level, val, buildFields(fields...)...)
+		writePlainAny(writer, level, val, buildPlainFields(fields...)...)
 	default:
-		entry := make(logEntryWithFields)
+		entry := make(logEntry)
 		for _, field := range fields {
 			entry[field.Key] = field.Value
 		}
@@ -285,6 +316,8 @@ func wrapLevelWithColor(level string) string {
 	case levelInfo:
 		colour = color.FgBlue
 	case levelSlow:
+		colour = color.FgYellow
+	case levelDebug:
 		colour = color.FgYellow
 	case levelStat:
 		colour = color.FgGreen
@@ -323,7 +356,7 @@ func writePlainAny(writer io.Writer, level string, val interface{}, fields ...st
 }
 
 func writePlainText(writer io.Writer, level, msg string, fields ...string) {
-	var buf strings.Builder
+	var buf bytes.Buffer
 	buf.WriteString(getTimestamp())
 	buf.WriteByte(plainEncodingSep)
 	buf.WriteString(level)
@@ -339,13 +372,13 @@ func writePlainText(writer io.Writer, level, msg string, fields ...string) {
 		return
 	}
 
-	if _, err := fmt.Fprint(writer, buf.String()); err != nil {
+	if _, err := writer.Write(buf.Bytes()); err != nil {
 		log.Println(err.Error())
 	}
 }
 
 func writePlainValue(writer io.Writer, level string, val interface{}, fields ...string) {
-	var buf strings.Builder
+	var buf bytes.Buffer
 	buf.WriteString(getTimestamp())
 	buf.WriteByte(plainEncodingSep)
 	buf.WriteString(level)
@@ -365,7 +398,7 @@ func writePlainValue(writer io.Writer, level string, val interface{}, fields ...
 		return
 	}
 
-	if _, err := fmt.Fprint(writer, buf.String()); err != nil {
+	if _, err := writer.Write(buf.Bytes()); err != nil {
 		log.Println(err.Error())
 	}
 }

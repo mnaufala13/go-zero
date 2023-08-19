@@ -10,27 +10,31 @@ var (
 	Cmd = &cobra.Command{
 		Use:   "rpc",
 		Short: "Generate rpc code",
-		RunE:  cli.RPCTemplate,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.RPCTemplate(true)
+		},
 	}
 
 	newCmd = &cobra.Command{
 		Use:   "new",
 		Short: "Generate rpc demo service",
-		Args:  cobra.ExactValidArgs(1),
+		Args:  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		RunE:  cli.RPCNew,
 	}
 
 	templateCmd = &cobra.Command{
 		Use:   "template",
 		Short: "Generate proto template",
-		RunE:  cli.RPCTemplate,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.RPCTemplate(false)
+		},
 	}
 
 	protocCmd = &cobra.Command{
 		Use:     "protoc",
 		Short:   "Generate grpc code",
 		Example: "goctl rpc protoc xx.proto --go_out=./pb --go-grpc_out=./pb --zrpc_out=.",
-		Args:    cobra.ExactValidArgs(1),
+		Args:    cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		RunE:    cli.ZRPC,
 	}
 )

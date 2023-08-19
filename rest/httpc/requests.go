@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptrace"
 	nurl "net/url"
 	"strings"
 
@@ -157,7 +156,7 @@ func fillPath(u *nurl.URL, val map[string]interface{}) error {
 }
 
 func request(r *http.Request, cli client) (*http.Response, error) {
-	tracer := otel.GetTracerProvider().Tracer(trace.TraceName)
+	tracer := otel.Tracer(trace.TraceName)
 	propagator := otel.GetTextMapPropagator()
 
 	spanName := r.URL.Path
@@ -176,11 +175,6 @@ func request(r *http.Request, cli client) (*http.Response, error) {
 		respHandlers[i] = h
 	}
 
-	clientTrace := httptrace.ContextClientTrace(ctx)
-	if clientTrace != nil {
-		ctx = httptrace.WithClientTrace(ctx, clientTrace)
-	}
-
 	r = r.WithContext(ctx)
 	propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
 
@@ -196,7 +190,7 @@ func request(r *http.Request, cli client) (*http.Response, error) {
 	}
 
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(resp.StatusCode)...)
-	span.SetStatus(semconv.SpanStatusFromHTTPStatusCode(resp.StatusCode))
+	span.SetStatus(semconv.SpanStatusFromHTTPStatusCodeAndSpanKind(resp.StatusCode, oteltrace.SpanKindClient))
 
 	return resp, err
 }

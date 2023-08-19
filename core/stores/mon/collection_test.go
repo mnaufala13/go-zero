@@ -106,14 +106,14 @@ func TestCollection_BulkWrite(t *testing.T) {
 		}
 		mt.AddMockResponses(mtest.CreateSuccessResponse(bson.D{{Key: "ok", Value: 1}}...))
 		res, err := c.BulkWrite(context.Background(), []mongo.WriteModel{
-			mongo.NewInsertOneModel().SetDocument(bson.D{{Key: "foo", Value: 1}})},
-		)
+			mongo.NewInsertOneModel().SetDocument(bson.D{{Key: "foo", Value: 1}}),
+		})
 		assert.Nil(t, err)
 		assert.NotNil(t, res)
 		c.brk = new(dropBreaker)
 		_, err = c.BulkWrite(context.Background(), []mongo.WriteModel{
-			mongo.NewInsertOneModel().SetDocument(bson.D{{Key: "foo", Value: 1}})},
-		)
+			mongo.NewInsertOneModel().SetDocument(bson.D{{Key: "foo", Value: 1}}),
+		})
 		assert.Equal(t, errDummy, err)
 	})
 }
@@ -204,7 +204,7 @@ func TestCollection_EstimatedDocumentCount(t *testing.T) {
 	})
 }
 
-func TestCollectionFind(t *testing.T) {
+func TestCollection_Find(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	defer mt.Close()
 
@@ -252,7 +252,7 @@ func TestCollectionFind(t *testing.T) {
 	})
 }
 
-func TestCollectionFindOne(t *testing.T) {
+func TestCollection_FindOne(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	defer mt.Close()
 
@@ -436,7 +436,7 @@ func TestCollection_InsertMany(t *testing.T) {
 	})
 }
 
-func TestCollection_Remove(t *testing.T) {
+func TestCollection_DeleteOne(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	defer mt.Close()
 
@@ -456,7 +456,7 @@ func TestCollection_Remove(t *testing.T) {
 	})
 }
 
-func TestCollectionRemoveAll(t *testing.T) {
+func TestCollection_DeleteMany(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	defer mt.Close()
 
@@ -565,7 +565,7 @@ func TestCollection_UpdateMany(t *testing.T) {
 	})
 }
 
-func Test_DecoratedCollectionLogDuration(t *testing.T) {
+func TestDecoratedCollection_LogDuration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	defer mt.Close()
 	c := decoratedCollection{

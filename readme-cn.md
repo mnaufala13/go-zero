@@ -23,7 +23,7 @@
 > 
 > `GOPROXY=https://goproxy.cn/,direct go install github.com/zeromicro/go-zero/tools/goctl@latest`
 > 
-> `goctl migrate —verbose —version v1.4.0`
+> `goctl migrate —verbose —version v1.4.3`
 
 ## 0. go-zero 介绍
 
@@ -293,6 +293,9 @@ go-zero 已被许多公司用于生产部署，接入场景如在线教育、电
 >78. ZeroCMF
 >79. 安徽寻梦投资发展集团
 >80. 广州腾思信息科技有限公司
+>81. 广州机智云物联网科技有限公司
+>82. 厦门亿联网络技术股份有限公司
+>83. 北京麦芽田网络科技有限公司
 
 如果贵公司也已使用 go-zero，欢迎在 [登记地址](https://github.com/zeromicro/go-zero/issues/602) 登记，仅仅为了推广，不做其它用途。
 

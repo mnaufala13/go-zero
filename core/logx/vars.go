@@ -3,8 +3,10 @@ package logx
 import "errors"
 
 const (
-	// InfoLevel logs everything
-	InfoLevel uint32 = iota
+	// DebugLevel logs everything
+	DebugLevel uint32 = iota
+	// InfoLevel does not include debugs
+	InfoLevel
 	// ErrorLevel includes errors, slows, stacks
 	ErrorLevel
 	// SevereLevel only log severe messages
@@ -14,13 +16,13 @@ const (
 const (
 	jsonEncodingType = iota
 	plainEncodingType
-
-	plainEncoding    = "plain"
-	plainEncodingSep = '\t'
-	sizeRotationRule = "size"
 )
 
 const (
+	plainEncoding    = "plain"
+	plainEncodingSep = '\t'
+	sizeRotationRule = "size"
+
 	accessFilename = "access.log"
 	errorFilename  = "error.log"
 	severeFilename = "severe.log"
@@ -37,6 +39,7 @@ const (
 	levelFatal  = "fatal"
 	levelSlow   = "slow"
 	levelStat   = "stat"
+	levelDebug  = "debug"
 
 	backupFileDelimiter = "-"
 	flags               = 0x0
@@ -50,6 +53,7 @@ const (
 	spanKey      = "span"
 	timestampKey = "@timestamp"
 	traceKey     = "trace"
+	truncatedKey = "truncated"
 )
 
 var (
@@ -57,4 +61,6 @@ var (
 	ErrLogPathNotSet = errors.New("log path must be set")
 	// ErrLogServiceNameNotSet is an error that indicates that the service name is not set.
 	ErrLogServiceNameNotSet = errors.New("log service name must be set")
+
+	truncatedField = Field(truncatedKey, true)
 )
