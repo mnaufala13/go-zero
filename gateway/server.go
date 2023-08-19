@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/fullstorydev/grpcurl"
 	"github.com/golang/protobuf/jsonpb"
@@ -17,7 +16,6 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 )
 
 type (
@@ -25,8 +23,8 @@ type (
 	Server struct {
 		*rest.Server
 		upstreams     []Upstream
-		timeout       time.Duration
 		processHeader func(http.Header) []string
+		dialer        func(conf zrpc.RpcClientConf) zrpc.Client
 	}
 
 	// Option defines the method to customize Server.
@@ -36,9 +34,8 @@ type (
 // MustNewServer creates a new gateway server.
 func MustNewServer(c GatewayConf, opts ...Option) *Server {
 	svr := &Server{
-		Server:    rest.MustNewServer(c.RestConf),
 		upstreams: c.Upstreams,
-		timeout:   c.Timeout,
+		Server:    rest.MustNewServer(c.RestConf),
 	}
 	for _, opt := range opts {
 		opt(svr)
@@ -63,13 +60,18 @@ func (s *Server) build() error {
 		return err
 	}
 
-	return mr.MapReduceVoid(func(source chan<- interface{}) {
+	return mr.MapReduceVoid(func(source chan<- Upstream) {
 		for _, up := range s.upstreams {
 			source <- up
 		}
-	}, func(item interface{}, writer mr.Writer, cancel func(error)) {
-		up := item.(Upstream)
-		cli := zrpc.MustNewClient(up.Grpc)
+	}, func(up Upstream, writer mr.Writer[rest.Route], cancel func(error)) {
+		var cli zrpc.Client
+		if s.dialer != nil {
+			cli = s.dialer(up.Grpc)
+		} else {
+			cli = zrpc.MustNewClient(up.Grpc)
+		}
+
 		source, err := s.createDescriptorSource(cli, up)
 		if err != nil {
 			cancel(fmt.Errorf("%s: %w", up.Name, err))
@@ -109,9 +111,8 @@ func (s *Server) build() error {
 				Handler: s.buildHandler(source, resolver, cli, m.RpcPath),
 			})
 		}
-	}, func(pipe <-chan interface{}, cancel func(error)) {
-		for item := range pipe {
-			route := item.(rest.Route)
+	}, func(pipe <-chan rest.Route, cancel func(error)) {
+		for route := range pipe {
 			s.Server.AddRoute(route)
 		}
 	})
@@ -122,24 +123,20 @@ func (s *Server) buildHandler(source grpcurl.DescriptorSource, resolver jsonpb.A
 	return func(w http.ResponseWriter, r *http.Request) {
 		parser, err := internal.NewRequestParser(r, resolver)
 		if err != nil {
-			httpx.Error(w, err)
+			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		timeout := internal.GetTimeout(r.Header, s.timeout)
-		ctx, can := context.WithTimeout(r.Context(), timeout)
-		defer can()
-
 		w.Header().Set(httpx.ContentType, httpx.JsonContentType)
 		handler := internal.NewEventHandler(w, resolver)
-		if err := grpcurl.InvokeRPC(ctx, source, cli.Conn(), rpcPath, s.prepareMetadata(r.Header),
+		if err := grpcurl.InvokeRPC(r.Context(), source, cli.Conn(), rpcPath, s.prepareMetadata(r.Header),
 			handler, parser.Next); err != nil {
-			httpx.Error(w, err)
+			httpx.ErrorCtx(r.Context(), w, err)
 		}
 
 		st := handler.Status
 		if st.Code() != codes.OK {
-			httpx.Error(w, st.Err())
+			httpx.ErrorCtx(r.Context(), w, st.Err())
 		}
 	}
 }
@@ -154,8 +151,7 @@ func (s *Server) createDescriptorSource(cli zrpc.Client, up Upstream) (grpcurl.D
 			return nil, err
 		}
 	} else {
-		refCli := grpc_reflection_v1alpha.NewServerReflectionClient(cli.Conn())
-		client := grpcreflect.NewClient(context.Background(), refCli)
+		client := grpcreflect.NewClientAuto(context.Background(), cli.Conn())
 		source = grpcurl.DescriptorSourceFromServer(context.Background(), client)
 	}
 
@@ -163,13 +159,13 @@ func (s *Server) createDescriptorSource(cli zrpc.Client, up Upstream) (grpcurl.D
 }
 
 func (s *Server) ensureUpstreamNames() error {
-	for _, up := range s.upstreams {
-		target, err := up.Grpc.BuildTarget()
+	for i := 0; i < len(s.upstreams); i++ {
+		target, err := s.upstreams[i].Grpc.BuildTarget()
 		if err != nil {
 			return err
 		}
 
-		up.Name = target
+		s.upstreams[i].Name = target
 	}
 
 	return nil
@@ -189,5 +185,12 @@ func (s *Server) prepareMetadata(header http.Header) []string {
 func WithHeaderProcessor(processHeader func(http.Header) []string) func(*Server) {
 	return func(s *Server) {
 		s.processHeader = processHeader
+	}
+}
+
+// withDialer sets a dialer to create a gRPC client.
+func withDialer(dialer func(conf zrpc.RpcClientConf) zrpc.Client) func(*Server) {
+	return func(s *Server) {
+		s.dialer = dialer
 	}
 }

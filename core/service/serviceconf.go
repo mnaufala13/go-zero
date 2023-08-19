@@ -1,14 +1,13 @@
 package service
 
 import (
-	"log"
-
 	"github.com/zeromicro/go-zero/core/load"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/prometheus"
 	"github.com/zeromicro/go-zero/core/stat"
 	"github.com/zeromicro/go-zero/core/trace"
+	"github.com/zeromicro/go-zero/internal/devserver"
 )
 
 const (
@@ -28,17 +27,17 @@ const (
 type ServiceConf struct {
 	Name       string
 	Log        logx.LogConf
-	Mode       string            `json:",default=pro,options=dev|test|rt|pre|pro"`
-	MetricsUrl string            `json:",optional"`
+	Mode       string `json:",default=pro,options=dev|test|rt|pre|pro"`
+	MetricsUrl string `json:",optional"`
+	// Deprecated: please use DevServer
 	Prometheus prometheus.Config `json:",optional"`
 	Telemetry  trace.Config      `json:",optional"`
+	DevServer  devserver.Config  `json:",optional"`
 }
 
 // MustSetUp sets up the service, exits on error.
 func (sc ServiceConf) MustSetUp() {
-	if err := sc.SetUp(); err != nil {
-		log.Fatal(err)
-	}
+	logx.Must(sc.SetUp())
 }
 
 // SetUp sets up the service.
@@ -64,6 +63,7 @@ func (sc ServiceConf) SetUp() error {
 	if len(sc.MetricsUrl) > 0 {
 		stat.SetReportWriter(stat.NewRemoteWriter(sc.MetricsUrl))
 	}
+	devserver.StartAgent(sc.DevServer)
 
 	return nil
 }

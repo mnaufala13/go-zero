@@ -3,7 +3,6 @@ package gen
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,10 +25,11 @@ type (
 	defaultGenerator struct {
 		console.Console
 		// source string
-		dir          string
-		pkg          string
-		cfg          *config.Config
-		isPostgreSql bool
+		dir           string
+		pkg           string
+		cfg           *config.Config
+		isPostgreSql  bool
+		ignoreColumns []string
 	}
 
 	// Option defines a function with argument defaultGenerator
@@ -82,14 +82,21 @@ func NewDefaultGenerator(dir string, cfg *config.Config, opt ...Option) (*defaul
 	return generator, nil
 }
 
-// WithConsoleOption creates a console option
+// WithConsoleOption creates a console option.
 func WithConsoleOption(c console.Console) Option {
 	return func(generator *defaultGenerator) {
 		generator.Console = c
 	}
 }
 
-// WithPostgreSql marks  defaultGenerator.isPostgreSql true
+// WithIgnoreColumns ignores the columns while insert or update rows.
+func WithIgnoreColumns(ignoreColumns []string) Option {
+	return func(generator *defaultGenerator) {
+		generator.ignoreColumns = ignoreColumns
+	}
+}
+
+// WithPostgreSql marks  defaultGenerator.isPostgreSql true.
 func WithPostgreSql() Option {
 	return func(generator *defaultGenerator) {
 		generator.isPostgreSql = true
@@ -160,7 +167,7 @@ func (g *defaultGenerator) createFile(modelList map[string]*codeTuple) error {
 
 		name := util.SafeString(modelFilename) + "_gen.go"
 		filename := filepath.Join(dirAbs, name)
-		err = ioutil.WriteFile(filename, []byte(codes.modelCode), os.ModePerm)
+		err = os.WriteFile(filename, []byte(codes.modelCode), os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -171,7 +178,7 @@ func (g *defaultGenerator) createFile(modelList map[string]*codeTuple) error {
 			g.Warning("%s already exists, ignored.", name)
 			continue
 		}
-		err = ioutil.WriteFile(filename, []byte(codes.modelCustomCode), os.ModePerm)
+		err = os.WriteFile(filename, []byte(codes.modelCustomCode), os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -189,7 +196,7 @@ func (g *defaultGenerator) createFile(modelList map[string]*codeTuple) error {
 		return err
 	}
 
-	err = util.With("vars").Parse(text).SaveTo(map[string]interface{}{
+	err = util.With("vars").Parse(text).SaveTo(map[string]any{
 		"pkg": g.pkg,
 	}, filename, false)
 	if err != nil {
@@ -235,6 +242,16 @@ type Table struct {
 	PrimaryCacheKey        Key
 	UniqueCacheKey         []Key
 	ContainsUniqueCacheKey bool
+	ignoreColumns          []string
+}
+
+func (t Table) isIgnoreColumns(columnName string) bool {
+	for _, v := range t.ignoreColumns {
+		if v == columnName {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *defaultGenerator) genModel(in parser.Table, withCache bool) (string, error) {
@@ -249,6 +266,7 @@ func (g *defaultGenerator) genModel(in parser.Table, withCache bool) (string, er
 	table.PrimaryCacheKey = primaryKey
 	table.UniqueCacheKey = uniqueKey
 	table.ContainsUniqueCacheKey = len(uniqueKey) > 0
+	table.ignoreColumns = g.ignoreColumns
 
 	importsCode, err := genImports(table, withCache, in.ContainsTime())
 	if err != nil {
@@ -335,7 +353,7 @@ func (g *defaultGenerator) genModelCustom(in parser.Table, withCache bool) (stri
 	t := util.With("model-custom").
 		Parse(text).
 		GoFmt(true)
-	output, err := t.Execute(map[string]interface{}{
+	output, err := t.Execute(map[string]any{
 		"pkg":                   g.pkg,
 		"withCache":             withCache,
 		"upperStartCamelObject": in.Name.ToCamel(),
@@ -356,7 +374,7 @@ func (g *defaultGenerator) executeModel(table Table, code *code) (*bytes.Buffer,
 	t := util.With("model").
 		Parse(text).
 		GoFmt(true)
-	output, err := t.Execute(map[string]interface{}{
+	output, err := t.Execute(map[string]any{
 		"pkg":         g.pkg,
 		"imports":     code.importsCode,
 		"vars":        code.varsCode,

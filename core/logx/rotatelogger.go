@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path"
@@ -115,7 +114,9 @@ func (r *DailyRotateRule) OutdatedFiles() []string {
 
 	var buf strings.Builder
 	boundary := time.Now().Add(-time.Hour * time.Duration(hoursPerDay*r.days)).Format(dateFormat)
-	fmt.Fprintf(&buf, "%s%s%s", r.filename, r.delimiter, boundary)
+	buf.WriteString(r.filename)
+	buf.WriteString(r.delimiter)
+	buf.WriteString(boundary)
 	if r.gzip {
 		buf.WriteString(gzipExt)
 	}
@@ -235,7 +236,7 @@ func NewLogger(filename string, rule RotateRule, compress bool) (*RotateLogger, 
 		rule:     rule,
 		compress: compress,
 	}
-	if err := l.init(); err != nil {
+	if err := l.initialize(); err != nil {
 		return nil, err
 	}
 
@@ -279,10 +280,10 @@ func (l *RotateLogger) getBackupFilename() string {
 	return l.backup
 }
 
-func (l *RotateLogger) init() error {
+func (l *RotateLogger) initialize() error {
 	l.backup = l.rule.BackupFileName()
 
-	if _, err := os.Stat(l.filename); err != nil {
+	if fileInfo, err := os.Stat(l.filename); err != nil {
 		basePath := path.Dir(l.filename)
 		if _, err = os.Stat(basePath); err != nil {
 			if err = os.MkdirAll(basePath, defaultDirMode); err != nil {
@@ -293,8 +294,11 @@ func (l *RotateLogger) init() error {
 		if l.fp, err = os.Create(l.filename); err != nil {
 			return err
 		}
-	} else if l.fp, err = os.OpenFile(l.filename, os.O_APPEND|os.O_WRONLY, defaultFileMode); err != nil {
-		return err
+	} else {
+		if l.fp, err = os.OpenFile(l.filename, os.O_APPEND|os.O_WRONLY, defaultFileMode); err != nil {
+			return err
+		}
+		l.currentSize = fileInfo.Size()
 	}
 
 	fs.CloseOnExec(l.fp)
@@ -401,7 +405,7 @@ func (l *RotateLogger) write(v []byte) {
 func compressLogFile(file string) {
 	start := time.Now()
 	Infof("compressing log file: %s", file)
-	if err := gzipFile(file); err != nil {
+	if err := gzipFile(file, fileSys); err != nil {
 		Errorf("compress error: %s", err)
 	} else {
 		Infof("compressed log file: %s, took %s", file, time.Since(start))
@@ -416,25 +420,37 @@ func getNowDateInRFC3339Format() string {
 	return time.Now().Format(fileTimeFormat)
 }
 
-func gzipFile(file string) error {
-	in, err := os.Open(file)
+func gzipFile(file string, fsys fileSystem) (err error) {
+	in, err := fsys.Open(file)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		if e := fsys.Close(in); e != nil {
+			Errorf("failed to close file: %s, error: %v", file, e)
+		}
+		if err == nil {
+			// only remove the original file when compression is successful
+			err = fsys.Remove(file)
+		}
+	}()
 
-	out, err := os.Create(fmt.Sprintf("%s%s", file, gzipExt))
+	out, err := fsys.Create(fmt.Sprintf("%s%s", file, gzipExt))
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		e := fsys.Close(out)
+		if err == nil {
+			err = e
+		}
+	}()
 
 	w := gzip.NewWriter(out)
-	if _, err = io.Copy(w, in); err != nil {
-		return err
-	} else if err = w.Close(); err != nil {
+	if _, err = fsys.Copy(w, in); err != nil {
+		// failed to copy, no need to close w
 		return err
 	}
 
-	return os.Remove(file)
+	return fsys.Close(w)
 }

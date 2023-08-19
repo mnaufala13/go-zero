@@ -3,7 +3,6 @@ package gen
 import (
 	"database/sql"
 	_ "embed"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,11 +12,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stringx"
 
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/builder"
+	"github.com/zeromicro/go-zero/core/stringx"
 	"github.com/zeromicro/go-zero/tools/goctl/config"
-	"github.com/zeromicro/go-zero/tools/goctl/model/sql/builderx"
 	"github.com/zeromicro/go-zero/tools/goctl/model/sql/parser"
 	"github.com/zeromicro/go-zero/tools/goctl/util/pathx"
 )
@@ -30,7 +29,7 @@ func TestCacheModel(t *testing.T) {
 	_ = Clean()
 
 	sqlFile := filepath.Join(pathx.MustTempDir(), "tmp.sql")
-	err := ioutil.WriteFile(sqlFile, []byte(source), 0o777)
+	err := os.WriteFile(sqlFile, []byte(source), 0o777)
 	assert.Nil(t, err)
 
 	dir := filepath.Join(pathx.MustTempDir(), "./testmodel")
@@ -65,7 +64,7 @@ func TestNamingModel(t *testing.T) {
 	_ = Clean()
 
 	sqlFile := filepath.Join(pathx.MustTempDir(), "tmp.sql")
-	err := ioutil.WriteFile(sqlFile, []byte(source), 0o777)
+	err := os.WriteFile(sqlFile, []byte(source), 0o777)
 	assert.Nil(t, err)
 
 	dir, _ := filepath.Abs("./testmodel")
@@ -103,7 +102,7 @@ func TestFolderName(t *testing.T) {
 	_ = Clean()
 
 	sqlFile := filepath.Join(pathx.MustTempDir(), "tmp.sql")
-	err := ioutil.WriteFile(sqlFile, []byte(source), 0o777)
+	err := os.WriteFile(sqlFile, []byte(source), 0o777)
 	assert.Nil(t, err)
 
 	dir, _ := filepath.Abs("./testmodel")
@@ -119,7 +118,7 @@ func TestFolderName(t *testing.T) {
 
 	pkg := g.pkg
 
-	err = g.StartFromDDL(sqlFile, true, "go_zero")
+	err = g.StartFromDDL(sqlFile, true, true, "go_zero")
 	assert.Nil(t, err)
 	assert.True(t, func() bool {
 		_, err := os.Stat(filepath.Join(camelDir, "TestUserModel.go"))
@@ -132,7 +131,7 @@ func TestFolderName(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	err = g.StartFromDDL(sqlFile, true, "go_zero")
+	err = g.StartFromDDL(sqlFile, true, true, "go_zero")
 	assert.Nil(t, err)
 	assert.True(t, func() bool {
 		_, err := os.Stat(filepath.Join(snakeDir, "test_user_model.go"))
@@ -158,7 +157,7 @@ func TestFields(t *testing.T) {
 		UpdateTime sql.NullTime    `db:"update_time"`
 	}
 	var (
-		studentFieldNames          = builderx.RawFieldNames(&Student{})
+		studentFieldNames          = builder.RawFieldNames(&Student{})
 		studentRows                = strings.Join(studentFieldNames, ",")
 		studentRowsExpectAutoSet   = strings.Join(stringx.Remove(studentFieldNames, "`id`", "`create_time`", "`update_time`"), ",")
 		studentRowsWithPlaceHolder = strings.Join(stringx.Remove(studentFieldNames, "`id`", "`create_time`", "`update_time`"), "=?,") + "=?"
@@ -179,7 +178,7 @@ func Test_genPublicModel(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	modelFilename := filepath.Join(modelDir, "foo.sql")
-	err = ioutil.WriteFile(modelFilename, []byte(source), 0o777)
+	err = os.WriteFile(modelFilename, []byte(source), 0o777)
 	require.NoError(t, err)
 
 	g, err := NewDefaultGenerator(modelDir, &config.Config{

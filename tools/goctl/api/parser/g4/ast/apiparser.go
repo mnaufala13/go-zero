@@ -19,7 +19,6 @@ type (
 		linePrefix               string
 		debug                    bool
 		log                      console.Console
-		src                      string
 		skipCheckTypeDeclaration bool
 		handlerMap               map[string]PlaceHolder
 		routeMap                 map[string]PlaceHolder
@@ -51,7 +50,7 @@ func NewParser(options ...ParserOption) *Parser {
 
 // Accept can parse any terminalNode of api tree by fn.
 // -- for debug
-func (p *Parser) Accept(fn func(p *api.ApiParserParser, visitor *ApiVisitor) interface{}, content string) (v interface{}, err error) {
+func (p *Parser) Accept(fn func(p *api.ApiParserParser, visitor *ApiVisitor) any, content string) (v any, err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
@@ -88,30 +87,29 @@ func (p *Parser) Parse(filename string) (*Api, error) {
 		return nil, err
 	}
 
-	p.src = abs
 	data, err := p.readContent(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	p.importStatck.push(p.src)
+	p.importStatck.push(abs)
 	return p.parse(filename, data)
 }
 
 // ParseContent is used to parse the api from the specified content
 func (p *Parser) ParseContent(content string, filename ...string) (*Api, error) {
-	var f string
+	var f, abs string
 	if len(filename) > 0 {
 		f = filename[0]
-		abs, err := filepath.Abs(f)
+		a, err := filepath.Abs(f)
 		if err != nil {
 			return nil, err
 		}
 
-		p.src = abs
+		abs = a
 	}
 
-	p.importStatck.push(p.src)
+	p.importStatck.push(abs)
 	return p.parse(f, content)
 }
 
@@ -127,7 +125,7 @@ func (p *Parser) parse(filename, content string) (*Api, error) {
 	apiAstList = append(apiAstList, root)
 	p.storeVerificationInfo(root)
 	p.syntax = root.Syntax
-	impApiAstList, err := p.invokeImportedApi(root.Import)
+	impApiAstList, err := p.invokeImportedApi(filename, root.Import)
 	if err != nil {
 		return nil, err
 	}
@@ -144,10 +142,10 @@ func (p *Parser) parse(filename, content string) (*Api, error) {
 	return allApi, nil
 }
 
-func (p *Parser) invokeImportedApi(imports []*ImportExpr) ([]*Api, error) {
+func (p *Parser) invokeImportedApi(filename string, imports []*ImportExpr) ([]*Api, error) {
 	var apiAstList []*Api
 	for _, imp := range imports {
-		dir := filepath.Dir(p.src)
+		dir := filepath.Dir(filename)
 		impPath := strings.ReplaceAll(imp.Value.Text(), "\"", "")
 		if !filepath.IsAbs(impPath) {
 			impPath = filepath.Join(dir, impPath)
@@ -178,7 +176,7 @@ func (p *Parser) invokeImportedApi(imports []*ImportExpr) ([]*Api, error) {
 		}
 		p.storeVerificationInfo(nestedApi)
 		apiAstList = append(apiAstList, nestedApi)
-		list, err := p.invokeImportedApi(nestedApi.Import)
+		list, err := p.invokeImportedApi(impPath, nestedApi.Import)
 		p.importStatck.pop()
 		apiAstList = append(apiAstList, list...)
 
@@ -507,7 +505,7 @@ func (p *Parser) readContent(filename string) (string, error) {
 }
 
 // SyntaxError accepts errors and panic it
-func (p *Parser) SyntaxError(_ antlr.Recognizer, _ interface{}, line, column int, msg string, _ antlr.RecognitionException) {
+func (p *Parser) SyntaxError(_ antlr.Recognizer, _ any, line, column int, msg string, _ antlr.RecognitionException) {
 	str := fmt.Sprintf(`%s line %d:%d  %s`, p.linePrefix, line, column, msg)
 	if p.debug {
 		p.log.Error(str)
